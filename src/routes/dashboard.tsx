@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DollarSign, Plug, Sun, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { ActionCard, AnimatedNumber, EnergyFlow, GlassCard, SocGauge } from "@/components/energy";
@@ -23,11 +23,8 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const series = Array.from({ length: 24 }, (_, h) => {
-  const sun = Math.max(0, Math.sin(((h - 6) / 12) * Math.PI));
   return {
     hour: `${h}:00`,
-    production: Math.round(40 + sun * 190 + Math.sin(h) * 10),
-    consumption: Math.round(110 + Math.sin(((h - 9) / 24) * 2 * Math.PI) * 40),
     soc: Math.round(Math.min(98, Math.max(18, 45 + Math.sin(((h - 10) / 24) * 2 * Math.PI) * 35))),
     tariff: +(0.1 + (h >= 17 && h <= 21 ? 0.12 : 0) + (h >= 7 && h <= 10 ? 0.05 : 0)).toFixed(2),
   };
@@ -48,6 +45,11 @@ function Dashboard() {
   const res = useMemo(() => latest?.response ?? mockPredict(DEMO_REQUEST), [latest]);
   const prod = res.decision_tree_prediction_kw;
   const net = res.energy_management.predicted_surplus_kw;
+  const runs = (history ?? []).slice().reverse().map((h, i) => ({
+    run: `#${i + 1} ${new Date(h.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    production: +h.response.decision_tree_prediction_kw.toFixed(1),
+    consumption: h.request.Energy_Consumption_kW,
+  }));
 
   return (
     <div>
@@ -79,7 +81,7 @@ function Dashboard() {
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <GlassCard className="lg:col-span-3">
           <h2 className="mb-2 font-bold">Energy flow</h2>
-          <EnergyFlow production={prod} consumption={req.Energy_Consumption_kW} action={res.energy_management.recommended_action} />
+          <EnergyFlow production={prod} consumption={req.Energy_Consumption_kW} action={res.energy_management.recommended_action} source={req.Renewable_Type} />
         </GlassCard>
         <div className="lg:col-span-2">
           <ActionCard em={res.energy_management} large />
@@ -90,21 +92,30 @@ function Dashboard() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Production vs consumption (24h)">
-          <AreaChart data={series}>
-            <defs>
-              <linearGradient id="gp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--solar)" stopOpacity={0.6} /><stop offset="100%" stopColor="var(--solar)" stopOpacity={0} /></linearGradient>
-              <linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--teal)" stopOpacity={0.5} /><stop offset="100%" stopColor="var(--teal)" stopOpacity={0} /></linearGradient>
-            </defs>
-            <CartesianGrid strokeOpacity={0.1} />
-            <XAxis dataKey="hour" fontSize={11} stroke="var(--muted-foreground)" />
-            <YAxis fontSize={11} stroke="var(--muted-foreground)" />
-            <Tooltip {...tip} />
-            <Area dataKey="production" stroke="var(--solar)" fill="url(#gp)" strokeWidth={2} />
-            <Area dataKey="consumption" stroke="var(--teal)" fill="url(#gc)" strokeWidth={2} />
-          </AreaChart>
+        <ChartCard title="Recent predictions — production vs consumption (kW)">
+          {runs.length === 0 ? (
+            <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
+              <p>No runs yet. <Link to="/predictor" className="font-semibold text-primary underline">Run a prediction</Link> to see this chart.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={runs}>
+                <defs>
+                  <linearGradient id="gp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--solar)" stopOpacity={0.6} /><stop offset="100%" stopColor="var(--solar)" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--teal)" stopOpacity={0.5} /><stop offset="100%" stopColor="var(--teal)" stopOpacity={0} /></linearGradient>
+                </defs>
+                <CartesianGrid strokeOpacity={0.1} />
+                <XAxis dataKey="run" fontSize={10} stroke="var(--muted-foreground)" />
+                <YAxis fontSize={11} stroke="var(--muted-foreground)" />
+                <Tooltip {...tip} />
+                <Legend />
+                <Area dataKey="production" name="Predicted production" stroke="var(--solar)" fill="url(#gp)" strokeWidth={2} dot />
+                <Area dataKey="consumption" name="Consumption" stroke="var(--teal)" fill="url(#gc)" strokeWidth={2} dot />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </ChartCard>
-        <ChartCard title="Battery SOC (%)">
+        <ChartCard title="Battery SOC (%)" illustrative>
           <LineChart data={series}>
             <CartesianGrid strokeOpacity={0.1} />
             <XAxis dataKey="hour" fontSize={11} stroke="var(--muted-foreground)" />
@@ -113,7 +124,7 @@ function Dashboard() {
             <Line dataKey="soc" stroke="var(--battery)" strokeWidth={3} dot={false} />
           </LineChart>
         </ChartCard>
-        <ChartCard title="Energy mix">
+        <ChartCard title="Energy mix" illustrative>
           <PieChart>
             <Tooltip {...tip} />
             <Pie data={mix} dataKey="value" innerRadius={60} outerRadius={95} paddingAngle={4}>
@@ -121,7 +132,7 @@ function Dashboard() {
             </Pie>
           </PieChart>
         </ChartCard>
-        <ChartCard title="Tariff trend ($/kWh)">
+        <ChartCard title="Tariff trend ($/kWh)" illustrative>
           <BarChart data={series}>
             <CartesianGrid strokeOpacity={0.1} />
             <XAxis dataKey="hour" fontSize={11} stroke="var(--muted-foreground)" />
@@ -178,12 +189,15 @@ function Kpi({ icon: Icon, label, value, unit, color, decimals = 1 }: { icon: ty
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactElement }) {
+function ChartCard({ title, children, illustrative }: { title: string; children: React.ReactElement; illustrative?: boolean }) {
   return (
     <GlassCard>
-      <h2 className="mb-3 font-bold">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-bold">{title}</h2>
+        {illustrative && <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Illustrative data</span>}
+      </div>
       <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+        {illustrative ? <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer> : children}
       </div>
     </GlassCard>
   );
