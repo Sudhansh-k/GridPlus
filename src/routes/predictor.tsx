@@ -70,7 +70,7 @@ function Predictor() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (invalid) return toast.error("Please fix the highlighted fields.");
+    if (invalid) { toast.error("Please fix the highlighted fields."); return; }
     setLoading(true);
     try {
       const r = await predict(form);
@@ -120,7 +120,7 @@ function Predictor() {
                     aria-invalid={!!errors[d.key]}
                     className={cn("w-24 rounded-lg border bg-background px-2 py-1 text-right text-sm", errors[d.key] && "border-alert")} />
                 </div>
-                <Slider min={d.min} max={d.max} step={d.step} value={[Number.isNaN(form[d.key]) ? d.min : Math.min(d.max, Math.max(d.min, form[d.key]))]} onValueChange={([v]) => set(d.key, v)} aria-label={d.label} />
+                <Slider min={d.min} max={d.max} step={d.step} value={[Number.isNaN(form[d.key]) ? d.min : Math.min(d.max, Math.max(d.min, form[d.key]))]} onValueChange={([v]) => set(d.key, v ?? d.min)} aria-label={d.label} />
                 {errors[d.key] && <p className="mt-1 text-xs text-alert">{errors[d.key]}</p>}
               </div>
             ))}
