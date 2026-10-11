@@ -102,8 +102,8 @@ export function EnergyFlow({
   return (
     <svg viewBox="0 0 500 300" className={cn("w-full", compact ? "max-h-64" : "max-h-80")} role="img" aria-label="Energy flow diagram">
       {edges.map((e, i) => {
-        const a = nodes[e.from];
-        const b = nodes[e.to];
+        const a = nodes[e.from]!;
+        const b = nodes[e.to]!;
         const mx = (a.x + b.x) / 2;
         const d = `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
         return (
