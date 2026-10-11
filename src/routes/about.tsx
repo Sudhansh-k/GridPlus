@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Loader2, ShieldAlert, XCircle } from "lucide-react";
 import { PageHeader, ThemeToggle } from "@/components/AppShell";
 import { GlassCard } from "@/components/energy";
-import { checkHealth, DEFAULT_API, getApiBase, setApiBase } from "@/lib/api";
+import { checkHealthDetailed, DEFAULT_API, getApiBase, normalizeBase, setApiBase } from "@/lib/api";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -29,9 +29,12 @@ function About() {
 
   async function test() {
     setStatus("loading");
-    const ok = await checkHealth(url.replace(/\/+$/, ""));
+    const base = normalizeBase(url);
+    setUrl(base);
+    const { ok, error } = await checkHealthDetailed(base);
     setStatus(ok ? "ok" : "fail");
-    ok ? toast.success("Backend is reachable") : toast.error("Could not reach /health");
+    if (ok) toast.success("Backend is reachable");
+    else toast.error("Could not reach /health", { description: error });
   }
 
   return (
@@ -59,7 +62,7 @@ function About() {
             <label htmlFor="api" className="text-sm font-medium">API base URL</label>
             <div className="mt-2 flex gap-2">
               <input id="api" value={url} onChange={(e) => setUrl(e.target.value)} className="flex-1 rounded-xl border bg-background px-3 py-2 text-sm" />
-              <button onClick={() => { setApiBase(url || DEFAULT_API); toast.success("Saved"); }} className="rounded-xl bg-brand px-4 text-sm font-semibold text-on-accent">Save</button>
+              <button onClick={() => { const b = normalizeBase(url); setUrl(b); setApiBase(b); toast.success("Saved", { description: b }); }} className="rounded-xl bg-brand px-4 text-sm font-semibold text-on-accent">Save</button>
             </div>
           </div>
           <div className="flex items-center gap-3">

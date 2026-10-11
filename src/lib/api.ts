@@ -43,12 +43,15 @@ export interface PredictResult {
 export const DEFAULT_API = "http://127.0.0.1:8000";
 const API_KEY = "gridpulse.apiBase";
 
+export function normalizeBase(url: string): string {
+  return url.trim().replace(/\/+$/, "") || DEFAULT_API;
+}
 export function getApiBase(): string {
   if (typeof window === "undefined") return DEFAULT_API;
-  return localStorage.getItem(API_KEY) || DEFAULT_API;
+  return normalizeBase(localStorage.getItem(API_KEY) || DEFAULT_API);
 }
 export function setApiBase(url: string) {
-  localStorage.setItem(API_KEY, url.replace(/\/+$/, ""));
+  localStorage.setItem(API_KEY, normalizeBase(url));
   window.dispatchEvent(new Event("gridpulse:api"));
 }
 
@@ -62,15 +65,26 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 6000) 
   }
 }
 
-export async function checkHealth(base = getApiBase()): Promise<boolean> {
+export function describeError(e: unknown): string {
+  if (e instanceof DOMException && e.name === "AbortError") return "Request timed out";
+  if (e instanceof TypeError) return `Network error: ${e.message} (server down, wrong URL, or CORS/mixed-content blocked)`;
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
+export async function checkHealthDetailed(base = getApiBase()): Promise<{ ok: boolean; error?: string }> {
   try {
-    const r = await fetchWithTimeout(`${base}/health`, {}, 4000);
-    if (!r.ok) return false;
-    const j = (await r.json()) as { status?: string };
-    return j.status === "ok";
-  } catch {
-    return false;
+    const r = await fetchWithTimeout(`${normalizeBase(base)}/health`, {}, 4000);
+    if (!r.ok) return { ok: false, error: `Server responded ${r.status} ${r.statusText}`.trim() };
+    const j = (await r.json().catch(() => ({}))) as { status?: string };
+    return j.status === "ok" ? { ok: true } : { ok: false, error: `Unexpected /health response: ${JSON.stringify(j)}` };
+  } catch (e) {
+    return { ok: false, error: describeError(e) };
   }
+}
+
+export async function checkHealth(base = getApiBase()): Promise<boolean> {
+  return (await checkHealthDetailed(base)).ok;
 }
 
 /** Dispatch rules — mirrors the backend logic. */
@@ -130,11 +144,16 @@ export async function predict(req: PredictRequest): Promise<PredictResult> {
         : "Invalid input";
       throw new ApiError(`Validation error — ${detail}`, 422);
     }
-    if (!r.ok) throw new ApiError(`Server error (${r.status})`, r.status);
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      let detail = body;
+      try { const j = JSON.parse(body); detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail ?? j); } catch { /* plain text */ }
+      throw new ApiError(`Server error ${r.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`, r.status);
+    }
     return { data: (await r.json()) as PredictResponse, mock: false };
   } catch (e) {
     if (e instanceof ApiError && e.status === 422) throw e;
-    const msg = e instanceof ApiError ? e.message : "Backend unreachable";
+    const msg = describeError(e);
     return { data: mockPredict(req), mock: true, error: msg };
   }
 }
