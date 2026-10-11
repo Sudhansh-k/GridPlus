@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Backend calls go through src/lib/api.ts, which falls back to in-browser mock predictions when the external API is unreachable — keeps the UI demoable offline.
