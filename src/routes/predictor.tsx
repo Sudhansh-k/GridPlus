@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/AppShell";
 import { ActionCard, AnimatedNumber, GlassCard } from "@/components/energy";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { addHistory, ApiError, DEMO_REQUEST, predict, type PredictRequest, type PredictResult, type RenewableType } from "@/lib/api";
+import { addHistory, ApiError, describeError, DEMO_REQUEST, predict, type PredictRequest, type PredictResult, type RenewableType } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/predictor")({
@@ -76,10 +76,10 @@ function Predictor() {
       const r = await predict(form);
       setResult(r);
       addHistory({ request: form, response: r.data, mock: r.mock });
-      if (r.mock) toast.warning(`${r.error}. Showing mock prediction.`);
+      if (r.mock) toast.warning("Backend request failed — showing mock prediction", { description: r.error });
       else toast.success("Prediction complete");
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Prediction failed");
+      toast.error("Prediction failed", { description: err instanceof ApiError ? err.message : describeError(err) });
     } finally {
       setLoading(false);
     }

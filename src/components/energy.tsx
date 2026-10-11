@@ -1,7 +1,7 @@
 import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { useEffect } from "react";
 import { Battery, Droplets, Home, Plug, Sun, Wind } from "lucide-react";
-import type { EnergyManagement } from "@/lib/api";
+import type { EnergyManagement, RenewableType } from "@/lib/api";
 import { ACTIONS } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 
@@ -56,75 +56,93 @@ export function ActionCard({ em, large }: { em: EnergyManagement; large?: boolea
 }
 
 type Node = { x: number; y: number; label: string; icon: typeof Sun; color: string };
+type Edge = { from: string; to: string; kw: number; color: string; active: boolean };
 
-/** Animated microgrid diagram. Arrow widths/directions react to inputs. */
+/** Microgrid diagram driven by the latest prediction: active source, direction and kW labels follow the action. */
 export function EnergyFlow({
   production = 180,
   consumption = 140,
   action = "CHARGE_BATTERY",
+  source = "Solar",
   compact,
 }: {
   production?: number;
   consumption?: number;
   action?: EnergyManagement["recommended_action"];
+  source?: RenewableType;
   compact?: boolean;
 }) {
   const nodes: Record<string, Node> = {
-    solar: { x: 60, y: 50, label: "Solar", icon: Sun, color: "var(--solar)" },
-    wind: { x: 60, y: 150, label: "Wind", icon: Wind, color: "var(--wind)" },
-    hydro: { x: 60, y: 250, label: "Hydro", icon: Droplets, color: "var(--hydro)" },
-    battery: { x: 250, y: 150, label: "Battery", icon: Battery, color: "var(--battery)" },
-    load: { x: 440, y: 90, label: "Load", icon: Home, color: "var(--teal)" },
-    grid: { x: 440, y: 230, label: "Grid", icon: Plug, color: "var(--grid)" },
+    Solar: { x: 60, y: 50, label: "Solar", icon: Sun, color: "var(--solar)" },
+    Wind: { x: 60, y: 150, label: "Wind", icon: Wind, color: "var(--wind)" },
+    Hydro: { x: 60, y: 250, label: "Hydro", icon: Droplets, color: "var(--hydro)" },
+    battery: { x: 250, y: 240, label: "Battery", icon: Battery, color: "var(--battery)" },
+    load: { x: 440, y: 80, label: "Load", icon: Home, color: "var(--teal)" },
+    grid: { x: 440, y: 240, label: "Grid", icon: Plug, color: "var(--grid)" },
   };
-  const w = (kw: number) => Math.max(1.5, Math.min(8, kw / 40));
-  const charging = action === "CHARGE_BATTERY";
-  const discharging = action === "DISCHARGE_BATTERY";
-  const importing = action === "IMPORT_FROM_GRID";
-  const shortage = action === "ENERGY_SHORTAGE_ALERT";
+  const w = (kw: number) => Math.max(1.5, Math.min(8, Math.abs(kw) / 40));
+  const surplus = production - consumption;
+  const deficit = Math.max(0, -surplus);
+  const src = nodes[source]!;
+  const toLoad = Math.min(production, consumption);
 
-  const edges: { from: string; to: string; width: number; color: string; active: boolean }[] = [
-    { from: "solar", to: "battery", width: w(production * 0.5), color: "var(--solar)", active: true },
-    { from: "wind", to: "battery", width: w(production * 0.3), color: "var(--wind)", active: true },
-    { from: "hydro", to: "battery", width: w(production * 0.2), color: "var(--hydro)", active: true },
-    {
-      from: "battery",
-      to: "load",
-      width: w(consumption),
-      color: shortage ? "var(--alert)" : "var(--teal)",
-      active: true,
-    },
-    importing
-      ? { from: "grid", to: "battery", width: w(Math.abs(production - consumption)), color: "var(--grid)", active: true }
-      : { from: "battery", to: "grid", width: 2, color: "var(--grid)", active: false },
-  ];
+  const edges: Edge[] = [{ from: source, to: "load", kw: toLoad, color: src.color, active: toLoad > 0 }];
+  if (action === "CHARGE_BATTERY") edges.push({ from: source, to: "battery", kw: surplus, color: "var(--surplus)", active: true });
+  if (action === "DISCHARGE_BATTERY") edges.push({ from: "battery", to: "load", kw: deficit, color: "var(--battery)", active: true });
+  if (action === "IMPORT_FROM_GRID") edges.push({ from: "grid", to: "load", kw: deficit, color: "var(--grid)", active: true });
+  if (action === "ENERGY_SHORTAGE_ALERT") edges.push({ from: "grid", to: "load", kw: deficit, color: "var(--alert)", active: false });
+  if (action !== "IMPORT_FROM_GRID" && action !== "ENERGY_SHORTAGE_ALERT") edges.push({ from: "grid", to: "load", kw: 0, color: "var(--grid)", active: false });
+
+  const highlighted = new Set<string>([source, "load", ...edges.filter((e) => e.active).flatMap((e) => [e.from, e.to])]);
 
   return (
-    <svg viewBox="0 0 500 300" className={cn("w-full", compact ? "max-h-64" : "max-h-80")} role="img" aria-label="Energy flow diagram">
+    <svg viewBox="0 0 500 300" className={cn("w-full", compact ? "max-h-64" : "max-h-80")} role="img" aria-label={`Energy flow: ${source} source, action ${action}`}>
+      <defs>
+        {edges.map((e, i) => (
+          <marker key={i} id={`arr-${i}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill={e.color} />
+          </marker>
+        ))}
+      </defs>
       {edges.map((e, i) => {
         const a = nodes[e.from]!;
         const b = nodes[e.to]!;
-        const mx = (a.x + b.x) / 2;
-        const d = `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        const x1 = a.x + ux * 30, y1 = a.y + uy * 30, x2 = b.x - ux * 32, y2 = b.y - uy * 32;
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const cx = mx - uy * 25, cy = my + ux * 25;
+        const d = `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
+        const lx = (x1 + 2 * cx + x2) / 4, ly = (y1 + 2 * cy + y2) / 4;
         return (
-          <g key={i}>
-            <path d={d} stroke={e.color} strokeOpacity={0.15} strokeWidth={e.width + 4} fill="none" />
-            <path d={d} stroke={e.color} strokeWidth={e.width} fill="none" strokeLinecap="round" className={e.active ? "flow-dash" : ""} strokeOpacity={e.active ? 1 : 0.25} />
+          <g key={i} opacity={e.active ? 1 : 0.25}>
+            <path d={d} stroke={e.color} strokeOpacity={0.15} strokeWidth={w(e.kw) + 5} fill="none" />
+            <path d={d} stroke={e.color} strokeWidth={w(e.kw)} fill="none" strokeLinecap="round" className={e.active ? "flow-dash" : ""} markerEnd={e.active ? `url(#arr-${i})` : undefined} />
+            {e.active && (
+              <g transform={`translate(${lx},${ly})`}>
+                <rect x={-26} y={-9} width={52} height={18} rx={9} fill="var(--popover)" stroke={e.color} strokeWidth={1} />
+                <text textAnchor="middle" dy={4} fontSize={10} fontWeight={700} fill={e.color}>{Math.abs(e.kw).toFixed(1)} kW</text>
+              </g>
+            )}
           </g>
         );
       })}
       {Object.entries(nodes).map(([k, n]) => {
         const Icon = n.icon;
-        const glow = (k === "battery" && (charging || discharging)) || (k === "grid" && importing);
+        const on = highlighted.has(k);
+        const isSrc = k === source;
         return (
-          <g key={k} transform={`translate(${n.x - 26},${n.y - 26})`}>
-            <rect width={52} height={52} rx={16} fill="var(--popover)" stroke={n.color} strokeWidth={glow ? 3 : 1.5} />
+          <g key={k} transform={`translate(${n.x - 26},${n.y - 26})`} opacity={on ? 1 : 0.3}>
+            <rect width={52} height={52} rx={16} fill="var(--popover)" stroke={n.color} strokeWidth={isSrc ? 3 : 1.5} />
             <foreignObject x={14} y={10} width={24} height={24}>
               <Icon style={{ color: n.color }} width={24} height={24} />
             </foreignObject>
             <text x={26} y={46} textAnchor="middle" fontSize={8} fill="currentColor" opacity={0.8} fontWeight={600}>
               {n.label}
             </text>
+            {isSrc && (
+              <text x={26} y={-6} textAnchor="middle" fontSize={9} fontWeight={700} fill={n.color}>{production.toFixed(1)} kW</text>
+            )}
           </g>
         );
       })}
