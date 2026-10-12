@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { DollarSign, Plug, Sun, TrendingDown, TrendingUp, Zap } from "lucide-react";
+import { DollarSign, Plug, Sun, Trash2, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { PageHeader } from "@/components/AppShell";
 import { ActionCard, AnimatedNumber, EnergyFlow, GlassCard, SocGauge } from "@/components/energy";
-import { DEMO_REQUEST, getHistory, mockPredict, type HistoryEntry } from "@/lib/api";
+import { DEMO_REQUEST, clearHistory, getHistory, mockPredict, type HistoryEntry } from "@/lib/api";
 import { ACTIONS } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 
@@ -144,7 +145,18 @@ function Dashboard() {
       </div>
 
       <GlassCard className="mt-6 overflow-x-auto">
-        <h2 className="mb-3 font-bold">Recent predictions</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="font-bold">Recent predictions</h2>
+          {history && history.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { clearHistory(); setHistory([]); toast.success("Prediction history cleared"); }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-alert hover:text-alert"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Clear history
+            </button>
+          )}
+        </div>
         {history && history.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No predictions yet. <Link to="/predictor" className="font-semibold text-primary underline">Run your first one</Link>.
