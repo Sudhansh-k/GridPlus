@@ -176,7 +176,10 @@ const HIST_KEY = "gridpulse.history";
 export function getHistory(): HistoryEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
+    // Drop mock/fallback entries saved by older versions — only real API results count.
+    const list = (JSON.parse(localStorage.getItem(HIST_KEY) || "[]") as HistoryEntry[]).filter((e) => !e.mock);
+    localStorage.setItem(HIST_KEY, JSON.stringify(list));
+    return list;
   } catch {
     return [];
   }
@@ -184,6 +187,10 @@ export function getHistory(): HistoryEntry[] {
 export function addHistory(e: Omit<HistoryEntry, "id" | "at">) {
   const list = [{ ...e, id: crypto.randomUUID(), at: Date.now() }, ...getHistory()].slice(0, 10);
   localStorage.setItem(HIST_KEY, JSON.stringify(list));
+}
+export function clearHistory() {
+  localStorage.removeItem(HIST_KEY);
+  window.dispatchEvent(new Event("gridpulse:history"));
 }
 
 export const DEMO_REQUEST: PredictRequest = {
