@@ -75,9 +75,12 @@ function Predictor() {
     try {
       const r = await predict(form);
       setResult(r);
-      addHistory({ request: form, response: r.data, mock: r.mock });
-      if (r.mock) toast.warning("Backend request failed — showing mock prediction", { description: r.error });
-      else toast.success("Prediction complete");
+      if (r.mock) {
+        toast.warning("Backend request failed — showing mock prediction (not saved to history)", { description: r.error });
+      } else {
+        addHistory({ request: form, response: r.data, mock: false });
+        toast.success("Prediction complete");
+      }
     } catch (err) {
       toast.error("Prediction failed", { description: err instanceof ApiError ? err.message : describeError(err) });
     } finally {
