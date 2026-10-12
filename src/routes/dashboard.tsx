@@ -172,7 +172,7 @@ function Dashboard() {
                 const a = ACTIONS[h.response.energy_management.recommended_action];
                 return (
                   <tr key={h.id} className="border-t">
-                    <td className="py-2">{new Date(h.at).toLocaleTimeString()}{h.mock && <span className="ml-1 text-[10px] text-solar">mock</span>}</td>
+                    <td className="py-2">{new Date(h.at).toLocaleTimeString()}</td>
                     <td>{h.request.Renewable_Type}</td>
                     <td>{h.response.decision_tree_prediction_kw.toFixed(1)}</td>
                     <td>{h.response.linear_regression_prediction_kw.toFixed(1)}</td>
