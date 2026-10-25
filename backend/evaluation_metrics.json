@@ -1,0 +1,14 @@
+{
+  "Linear Regression": {
+    "train_r2": 0.6025,
+    "test_r2": 0.5649,
+    "test_mae": 60.0135,
+    "test_rmse": 77.7748
+  },
+  "Decision Tree": {
+    "train_r2": 0.9629,
+    "test_r2": 0.8642,
+    "test_mae": 28.1392,
+    "test_rmse": 43.4489
+  }
+}

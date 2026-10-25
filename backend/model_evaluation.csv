@@ -1,0 +1,3 @@
+Model,Train_R2,Test_R2,Test_MAE,Test_RMSE
+Linear Regression,0.6025,0.5649,60.0135,77.7748
+Decision Tree,0.9629,0.8642,28.1392,43.4489
